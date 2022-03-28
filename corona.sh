@@ -13,14 +13,6 @@ IFS=','
 
 
 IFS=$OLDIFS
-#sem overenie, ci tam je input file alebo to treba citat z stdin
-
-# while read -r id datum vek pohlavi kraj_nuts_kod okres_lau_kod nakaza_v_zahranici nakaza_zeme_csu_kod reportovano_khs 
-# do 
-# # read -r id datum vek pohlavi kraj_nuts_kod okres_lau_kod nakaza_v_zahranici nakaza_zeme_csu_kod reportovano_khs 
-# echo "$id $datum $vek $pohlavi $kraj_nuts_kod $okres_lau_kod $nakaza_v_zahranici $nakaza_zeme_csu_kod $reportovano_khs"
-# done < $file
-
 
 
 
@@ -37,13 +29,13 @@ leap_year_pattern='^[0-9]{2}([02468][048]|[13579][26])(\-)((((0[13578]|1[02])(\-
 
 #overenia na format prepinacov
 verify_date() {
-    echo date verification $OPTARG; #regexp
-    if [[ $OPTARG =~ $normal_year_pattern ]] || [[ $OPTARG =~ $leap_year_pattern ]] #yyyy-mm-dd - basic verification - to ADD: limity, priestupne roky / kvôli februáru, validácia poctu dni
+    echo date verification $1; #regexp
+    if [[ $1 =~ $normal_year_pattern ]] || [[ $OPTARG =~ $leap_year_pattern ]] #yyyy-mm-dd - basic verification - to ADD: limity, priestupne roky / kvôli februáru, validácia poctu dni
     then 
         echo "the date format is valid"
         date_is_valid="true"
     else
-      echo "Invalid date: $OPTARG"
+      echo "Invalid date: $1"
       date_is_valid="false"
     fi
 }
@@ -67,6 +59,8 @@ check_histogram_width() {
   fi
 }
 
+histogram_commands='^(gender|age|daily|monthly|yearly|countries|districts|regions)$'
+
 # FILTERS může být kombinace následujících (každý maximálně jednou):
 # -a DATETIME — after: jsou uvažovány pouze záznamy PO tomto datu (včetně tohoto data). DATETIME je formátu YYYY-MM-DD.
 # -b DATETIME — before: jsou uvažovány pouze záznamy PŘED tímto datem (včetně tohoto data).
@@ -77,38 +71,25 @@ check_histogram_width() {
 # -h — vypíše nápovědu s krátkým popisem každého příkazu a přepínače.
 
 
-#COMMANDS
 
-# COMMAND může být jeden z:
-# infected — spočítá počet nakažených.
-# merge — sloučí několik souborů se záznamy do jednoho, zachovávající původní pořadí (hlavička bude ve výstupu jen jednou).
-# gender — vypíše počet nakažených pro jednotlivá pohlaví.
-# age — vypíše statistiku počtu nakažených osob dle věku (bližší popis je níže).
-# daily — vypíše statistiku nakažených osob pro jednotlivé dny.
-# monthly — vypíše statistiku nakažených osob pro jednotlivé měsíce.
-# yearly — vypíše statistiku nakažených osob pro jednotlivé roky.
-# countries — vypíše statistiku nakažených osob pro jednotlivé země nákazy (bez ČR, tj. kódu CZ).
-# districts — vypíše statistiku nakažených osob pro jednotlivé okresy.
-# regions — vypíše statistiku nakažených osob pro jednotlivé kraje.
-
-
-#REST
+#PARSING FILTERS 
 
 # Skript umí zpracovat i záznamy komprimované pomocí nástrojů gzip a bzip2 (v případě, že název souboru končí .gz resp. .bz2).
 # V případě, že skript na příkazové řádce nedostane soubory se záznamy (LOG, LOG2, …), očekává záznamy na standardním vstupu.
 
 optstring_filters=":a:b:g:s:h:"
-optstring_commands='^infected|gender|age|daily|monthly|yearly|countries|districts|regions$'
+optstring_commands='^(infected|merge|gender|age|daily|monthly|yearly|countries|districts|regions)$'
+head_regex='^id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs$'
 
 while getopts "${optstring_filters}" options; 
 do 
   case "${options}" in
-    a) verify_date; 
+    a) verify_date $OPTARG; 
     if [[ "$date_is_valid" = "true" ]]
     then after_date="$OPTARG"
     fi
     ;;
-    b) verify_date; 
+    b) verify_date $OPTARG; 
     if [[ "$date_is_valid" = "true" ]]
     then before_date="$OPTARG"
     fi
@@ -126,64 +107,14 @@ do
   esac
 done
 
+eval command=\$${OPTIND} #ziskanie nasledujuceho argumentu, ktory by mal byt command
 
-command=""
+#overenie commandu, ci je v mnozine prikazov
+if ! [[ $command =~ $optstring_commands ]]
+then 
+    command=""  
+fi
 
-get_command() {
-#bere to po prvom najdenom regexpe z vrchu - najprv hlada infected, potom daily atd.. mozno to skusit spravit od zacatku radku
-    if [[ $1 =~ infected ]] 
-    then command="infected"
-    elif [[ $1 =~ merge ]] 
-    then command="merge"
-    elif [[ $1 =~ gender ]] 
-    then command="gender"
-    elif [[ $1 =~ daily ]] 
-    then command="daily"
-    elif [[ $1 =~ monthly ]] 
-    then command="monthly"
-    elif [[ $1 =~ yearly ]] 
-    then command="yearly"
-    elif [[ $1 =~ countries ]] 
-    then command="countries"
-    elif [[ $1 =~ districts ]] 
-    then command="districts"
-    elif [[ $1 =~ regions ]] 
-    then command="regions"
-    fi
-
-    # case $1 in 
-    # [[:space:]]infected) 
-    # command="infected"
-    # ;;
-    # [[:space:]]merge) 
-    # command="merge"
-    # ;;
-    # [[:space:]]gender) 
-    # command="gender"
-    # ;;
-    # [[:space:]]daily) 
-    # command="daily"
-    # ;;
-    # [[:space:]]monthly) 
-    # command="monthly"
-    # ;;
-    # [[:space:]]yearly) 
-    # command="yearly"
-    # ;;
-    # [[:space:]]countries) 
-    # command="countries"
-    # ;;
-    # [[:space:]]districts) 
-    # command="districts"
-    # ;;
-    # [[:space:]]regions) 
-    # command="regions"
-    # ;;
-    # esac
-
-}
-
-get_command "$*"  #place here that command variable as argumet
 echo current command: $command
 #eval file=\$$# #zatial input file na poslednom argumente
 
@@ -197,12 +128,40 @@ echo current command: $command
 
 #LOADING DATA
 
+#dorobit cykly pre hladanie viacerych suborov
+
+DATA=""
 #funkcie na spracovavanie jednotlivych typov suborov
-load_data() {
-  echo loading data..
+
+
+head_regex='id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs'
+head_count=0
+new_line_regex='^(\r\n|\r|\n)$'
+
+load_data() { 
+    read -r line < $1 #nacitani prvej linky, kvoli hlavicke
+    echo $line 
+
+    if [[ $line =~ $head_regex ]] 
+    then 
+      echo TRUE
+      head_count=$(($head_count+1))
+    fi 
+
+    if (( $head_count > 1 )) #tu treba dat date verifycation 
+    then 
+      DATA+="$(awk '$0 !~ /^((\r\n|\r|\n)$|(id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs))/' $1)"
+    else
+    DATA+="$(awk '$0 !~ /^(\r\n|\r|\n)$/' $1)"
+    fi
+    DATA+=$'\n' #optional - moze sposobovat problemy
 }
 
+
+
 gz_open() {
+  #DATA=gzip -dc "here place the file you want to decompress..."
+
   echo processing gz file..
 }
 
@@ -215,27 +174,94 @@ csv_open() {
 }
 
 
-
 input_type="stdin"
 
 #get input type right here
+index=0
+while (( $index != $#+1 ))
+do
+  eval file=\$$index
+  if [[ $file =~ ^.*\.csv$ ]] 
+  then input_type="csv" ; echo csv ;  load_data $file ; ((count++))
+  elif [[ $file =~ ^.*\.bz2$ ]]
+  then input_type="bz2" ; echo bz2 ;  load_data $file ; ((count++)) 
+  elif [[ $file =~ ^.*\.zip$ ]] 
+  then input_type="zip" ; echo zip ;  ((count++))
+  elif [[ $file =~ ^.*\.gz$ ]]
+  then input_type="gz" echo gz ;  ((count++))
+  fi 
+  ((index++))
+done 
 
-if [[ "$*" =~ .csv ]] 
-then input_type="csv"
-elif [[ "$*" =~ .bz2 ]]
-then input_type="bz2"
-elif [[ "$*" =~ .zip ]]
-then input_type="zip"
-elif [[ "$*" =~ .gz ]]
-then input_type="gz"
-fi 
+echo number of files: $count
 
-case "$input_type" in
-    stdin) load_data ;;
-    csv) csv_open ;;
-    bz2) bz2_open;;
-    gz) gz_open;;
-esac
+echo "$DATA"
+
+#COMMANDS
+
+# COMMAND může být jeden z:
+# infected — spočítá počet nakažených.
+# merge — sloučí několik souborů se záznamy do jednoho, zachovávající původní pořadí (hlavička bude ve výstupu jen jednou).
+# gender — vypíše počet nakažených pro jednotlivá pohlaví.
+# age — vypíše statistiku počtu nakažených osob dle věku (bližší popis je níže).
+# daily — vypíše statistiku nakažených osob pro jednotlivé dny.
+# monthly — vypíše statistiku nakažených osob pro jednotlivé měsíce.
+# yearly — vypíše statistiku nakažených osob pro jednotlivé roky.
+# countries — vypíše statistiku nakažených osob pro jednotlivé země nákazy (bez ČR, tj. kódu CZ).
+# districts — vypíše statistiku nakažených osob pro jednotlivé okresy.
+# regions — vypíše statistiku nakažených osob pro jednotlivé kraje.
+
+
+infected() { #completed
+  infected_data=$(echo "$DATA" | awk '$0 !~ /^((\r\n|\r|\n)$|(id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs))/' | wc -l)
+  number_infected=$(($infected_data-1)) # minus header
+  echo Infected: $number_infected
+}
+
+merge() {
+  echo merge... #DATA +=... este zistit ci treba subor aj vytvorit
+}
+
+gender() { #completed
+  echo M: $(echo "$DATA" | awk -F, '$4 == "M"'  | wc -l) 
+  echo Z: $(echo "$DATA" | awk -F, '$4 == "Z"' | wc -l)
+}
+
+age() {
+  echo age... #podla intervalov vypise statistiku (tabulka) 
+          # interval: awk -F 'x <= $5 <=y' | wc -l
+}
+
+daily() {
+  echo daily... #statistika podla dni
+  #asi regexp 
+}
+
+monthly() {
+  echo monthly... #podla mesiacov
+}
+
+yearly() {
+  echo yearly... #podla rokov
+}
+
+countries() {
+  echo countries... #statistika nakazenych pre jednotlive krajiny - bez CZ
+}
+
+districts() {
+  echo districts... #pre okresy
+}
+
+regions() {
+  echo regions... #pre kraje
+}
+
+infected
+gender
+
+
+
 
 #load your data based on input type here 
 

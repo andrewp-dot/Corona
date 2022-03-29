@@ -1,6 +1,6 @@
 #!/bin/bash
 
-env -i POSIXLY_CORRECT=1
+env POSIXLY_CORRECT=1 | echo -n #trosku ojeb ale uvidme
 
 #BEGIN
 #funkcia na vypis pouzitia a ukoncenie corona aplikacie
@@ -207,17 +207,30 @@ new_line_regex='^(\r\n|\r|\n)$'
 
 input_type="stdin"
 
-load_data() { #works fine, ale prerobit aby to fungovalo pre vsetky typy suborov
+load_from_stdin() { #completed
+  while read -r line 
+  do 
+    if [[ $line =~ $head_regex ]] 
+    then 
+      DATA+="$line"
+      head_count=$(($head_count+1))
+    fi 
+
+    if (( $head_count == 1 )) && ! [[ $line =~ $head_regex ]]; then
+          DATA+=$'\n'
+          DATA+="$line"
+    fi
+  done
+}
+
+load_data() { #completed
  #nacitani prvej linky, kvoli hlavicke, pre kazdy typ suboru inak
     case "$input_type" in 
         csv) read -r line < $1 ;;
-        #stdin) ;;
         bz2) gzcat $1 | read -r line ;;
         zip) unzip $1 | read -r line ;;
         gz) gzcat $1 | read -r line ;;
     esac 
-    
-    #echo $line 
 
     if [[ $line =~ $head_regex ]] 
     then 
@@ -226,9 +239,8 @@ load_data() { #works fine, ale prerobit aby to fungovalo pre vsetky typy suborov
 
     if (( $head_count > 1 )) 
     then 
-     case "$input_type" in 
+    case "$input_type" in 
         csv) DATA+=$'\n' ; DATA+="$(awk -v header="$head_regex" -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line && $0 !~ header) {print $0 } }' $1)"  ;;
-        #stdin) ;;
         bz2) DATA+=$'\n' ;  DATA+="$(gzcat $1 | awk -v header="$head_regex" -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line && $0 !~ header) {print $0 } }' )" ;;
         zip) DATA+=$'\n' ;  DATA+="$(unzip $1 |  awk -v header="$head_regex" -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line && $0 !~ header) {print $0 } }' )" ;;
         gz) DATA+=$'\n' ;  DATA+="$(gzcat $1 |  awk -v header="$head_regex" -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line && $0 !~ header) {print $0 } }' )" ;;
@@ -237,7 +249,6 @@ load_data() { #works fine, ale prerobit aby to fungovalo pre vsetky typy suborov
     else
      case "$input_type" in 
         csv) DATA+="$(awk -v empty_line="$new_line_regex" '{ if($0 !~ empty_line) {print $0}}' $1)" ;;
-        #stdin) ;;
         bz2)  DATA+="$(gzcat $1 |  awk -v empty_line="$new_line_regex" '{ if($0 !~ empty_line) {print $0}}' )" ;;
         zip) DATA+="$(unzip $1 |  awk -v empty_line="$new_line_regex" '{ if($0 !~ empty_line) {print $0}}' )" ;;
         gz) DATA+="$(gzcat $1 |  awk -v empty_line="$new_line_regex" '{ if($0 !~ empty_line) {print $0}}' )" ;;
@@ -254,19 +265,24 @@ while (( $index != $#+1 ))
 do
   eval file=\$$index
   if [[ $file =~ ^.*\.csv$ ]] 
-  then input_type="csv" ; load_data $file ; ((count++))
+  then input_type="csv" ; load_data $file  
   elif [[ $file =~ ^.*\.bz2$ ]]
-  then input_type="bz2" ; load_data $file ; ((count++)) 
+  then input_type="bz2" ; load_data $file 
   elif [[ $file =~ ^.*\.zip$ ]] 
-  then input_type="zip" ;  load_data $file; ((count++))
+  then input_type="zip" ;  load_data $file 
   elif [[ $file =~ ^.*\.gz$ ]]
-  then input_type="gz" ; load_data $file ; ((count++))
+  then input_type="gz" ; load_data $file 
   fi 
   ((index++))
 done 
 
+if [[ $input_type == "stdin" ]]
+then
+    load_from_stdin 
+    DATA="$(echo "$DATA" | awk  -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line ) {print $0 } }' )"
+fi
+
 echo input type : $input_type
-echo number of files: $count
 
 #echo "$DATA"
 
@@ -338,28 +354,13 @@ printf("\
     count0_5 , count6_15 , count16_25 , count26_35 , count36_45, count46_55 , count56_65 , count66_75\
     , count76_85 , count86_95 , count96_105 , above_105)
   }'
-
-
-
-  # while (( $idx < 10 )) # mozno optimalizacia
-  # do 
-  #   echo $x\-$y: $(echo "$DATA" | awk -F, -v lower_idx="$x" -v higher_idx="$y" \
-  #   '{ if (lower_idx <= $3 && $3 <= higher_idx) { print $0} }'  \
-  #   | wc -l)
-  #   ((idx++)) 
-  #   x=$(($x+10))
-  #   y=$(($y+10))
-  #  done 
-    # echo "> 105": $(echo "$DATA" | awk -F, -v header="$head_regex" \
-    # '{ if ($3 > 105 && $0 !~ header) \
-    #  { print $0} }' | wc -l) 
 }
 
 daily() {
-   $(echo "$DATA" | awk -F,  | wc -l)  #pozn netreba overovat datujmy - uz su overene v tomto bode
-   #date1: data 
-   #date2: data
-   #prist na sposob, ako vyfiltrovat vsetky datumy
+  #pozn netreba overovat datujmy - uz su overene v tomto bode
+  #date1: data 
+  #date2: data
+  #prist na sposob, ako vyfiltrovat vsetky datumy
   echo daily... #statistika podla dni
   #asi regexp 
 }
@@ -398,9 +399,10 @@ case "$command" in
     "") merge ;;
 esac
 
+#overenie datumov 
 echo "$DATA" | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
-( $2 !~ norm_date && $2 !~ leap_date) {printf("Invalid date: %s\n",$0)}\
-($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) }' #vypisat to na stderr
+( $2 !~ norm_date && $2 !~ leap_date) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
+($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}' 
 
 #NEXT
 #dokocint filter s 

@@ -68,6 +68,7 @@ gender=""
 optstring_filters=":a:b:g:s:h"
 optstring_commands='^(infected|merge|gender|age|daily|monthly|yearly|countries|districts|regions)$'
 head_regex='(id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs)'
+header="id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs"
 new_line_regex='^([[:space:]]*|\r\n|\r|\n)$'
 
 while getopts "${optstring_filters}" options; 
@@ -212,14 +213,58 @@ fi
 
 }
 
-merge() { 
+merge() { #completed
   if [[ $input_type == "stdin" ]] ; then
     read_from_stdin
   fi
 
+if [[ "$gender" == "" ]];then 
+  #csv
+  for csv in "${csv_files[@]}";do
+    if [[ "$csv" != "" ]]; then
+      awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before' $csv 
+    fi
+  done
+  
+  #bz
+  for bzf in "${bz2_files[@]}"; do
+    gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before' 
+  done
+  
+  #gzf
+  for gzf in  "${gz_files[@]}"; do
+    gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before' 
+  done
+
+else 
+
+  #csv
+  for csv in "${csv_files[@]}"; do
+    if [[ "$csv" != "" ]]; then
+      awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" \
+       '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend' $csv  
+    fi
+  done
+
+  #bz
+  for bzf in "${bz2_files[@]}"; do 
+      gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
+        '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend'
+  done
+    
+  #gzf
+  for gzf in  "${gz_files[@]}"; do
+   gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
+      '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend' 
+  done
+fi
+
 }
 
-gender() { 
+gender() { #completed
 men=0
 women=0
   for csv in "${csv_files[@]}";do
@@ -228,7 +273,7 @@ women=0
       (( women+=$( awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
       '$0 !~ new_line && $0 !~ head && $4 == "Z" && after <= $2 && $2 <= before' $csv | wc -l) ))
     done
-    
+
     for bzf in "${bz2_files[@]}"; do
       (( men+=$( gzcat -q $bzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
       '$0 !~ new_line && $0 !~ head && $4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
@@ -349,7 +394,7 @@ done
 
 case "$command" in 
     infected) infected ;;
-    merge) merge ;;
+    merge) echo $header; merge | sort -d ;;
     gender) gender ;;
     age) age ;;
     daily) daily ;;
@@ -358,7 +403,7 @@ case "$command" in
     countries) countries ;;
     districts) districts ;;
     regions) regions ;;
-    "") merge ;;
+    "") echo $header; merge | sort -d ;;
 esac
 
 # awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
@@ -369,3 +414,41 @@ exit 0;
 
 #NAPAD ZA MILION - dat si premennu INPUT alebo pole INPUTFILES a z toho vytahovat data 
 
+#useful pattern
+# if [[ "$gender" == "" ]];then 
+
+#   if [[ "$input_type" == "stdin" ]]; then
+#   fi
+
+#   #csv
+#   for csv in "${csv_files[@]}";do
+#     if [[ "$csv" != "" ]]; then
+#     fi
+#   done
+  
+#   #bz
+#   for bzf in "${bz2_files[@]}"; do
+#   done
+  
+#   #gzf
+#   for gzf in  "${gz_files[@]}"; do
+#   done
+
+# else 
+#   if [[ "$input_type" == "stdin" ]]; then
+#   fi
+
+#   #csv
+#   for csv in "${csv_files[@]}"; do
+#     if [[ "$csv" != "" ]]; then
+#     fi
+#   done
+
+#   #bz
+#   for bzf in "${bz2_files[@]}"; do 
+#   done
+    
+#   #gzf
+#   for gzf in  "${gz_files[@]}"; do
+#   done
+# fi

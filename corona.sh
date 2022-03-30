@@ -70,9 +70,6 @@ optstring_commands='^(infected|merge|gender|age|daily|monthly|yearly|countries|d
 head_regex='(id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs)'
 new_line_regex='^([[:space:]]*|\r\n|\r|\n)$'
 
-number_of_arguments=$#
-declare -a program_arguments=("$@") 
-
 while getopts "${optstring_filters}" options; 
 do 
   case "${options}" in
@@ -136,8 +133,7 @@ read_data(){ #input type mi je na vyliz picu
 }
 
 #nacitanie zo standartneho vstupu
-read_from_stdin() { 
-  echo reading from stdin
+read_from_stdin() { #dobra na merge, ale treba vytvorit univerzalnu funkciu, ktora executne command passnuty do nej jak argument
   while read -r line 
         do
         if (( $head_count == 0 )) && [[ $line =~ $head_regex ]]; then
@@ -159,8 +155,13 @@ read_from_stdin() {
 
 infected() { #completed
   number_infected=0
-
 if [[ "$gender" == "" ]];then 
+
+  if [[ "$input_type" == "stdin" ]]; then
+  (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before'  | wc -l ) ))
+  fi
+
   #csv
   for csv in "${csv_files[@]}";do
     if [[ "$csv" != "" ]]; then
@@ -182,6 +183,11 @@ if [[ "$gender" == "" ]];then
   done
 
 else 
+  if [[ "$input_type" == "stdin" ]]; then
+  (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" \
+       '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend' | wc -l ) ))
+  fi
+
   #csv
   for csv in "${csv_files[@]}"; do
    if [[ "$csv" != "" ]]; then
@@ -202,11 +208,11 @@ else
       '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend'  | wc -l ) ))
   done
 fi
-
   echo $number_infected 
+
 }
 
-merge() { 
+merge() { #
    echo picovna
 }
 
@@ -319,9 +325,9 @@ do
   elif [[ $file =~ ^.*\.gz$ ]]
   then input_type="gz" ; gz_files[$gz_idx]="$file" ;((gz_idx++))
   fi 
-  if (( $index == $# )) && [[ "$input_type" == "stdin" ]];then
-      echo h #read_from_stdin 
-  fi
+  # if (( $index == $# )) && [[ "$input_type" == "stdin" ]];then
+  #     read_from_stdin #fix this
+  # fi
   ((index++))
 done 
 

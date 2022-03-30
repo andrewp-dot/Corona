@@ -331,7 +331,7 @@ printf("\
 > 105 : %d\n",
     count0_5 , count6_15 , count16_25 , count26_35 , count36_45, count46_55 , count56_65 , count66_75\
     , count76_85 , count86_95 , count96_105 , above_105)
-  }' $INPUT #dorobit formatovanie
+  }' $1 #dorobit formatovanie
 #if [[ "$histogram" == "true" ]]
 }
 
@@ -396,7 +396,7 @@ case "$command" in
     infected) infected ;;
     merge) echo $header; merge | sort -d ;;
     gender) gender ;;
-    age) age ;;
+    age) merge | age ;;
     daily) daily ;;
     monthly) monthly ;;
     yearly) yearly ;;

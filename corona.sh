@@ -212,25 +212,35 @@ fi
 
 }
 
-merge() { #
-   echo picovna
+merge() { 
+  if [[ $input_type == "stdin" ]] ; then
+    read_from_stdin
+  fi
+
 }
 
 gender() { 
 men=0
 women=0
   for csv in "${csv_files[@]}";do
-      (( men+=$( awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before'  $csv | wc -l) ))
-      (( women+=$( awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' $csv | wc -l) ))
+      (( men+=$( awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "M" && after <= $2 && $2 <= before'  $csv | wc -l) ))
+      (( women+=$( awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "Z" && after <= $2 && $2 <= before' $csv | wc -l) ))
     done
+    
     for bzf in "${bz2_files[@]}"; do
-      (( men+=$( gzcat -q $bzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
-      (( women+=$( gzcat -q $bzf |awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
+      (( men+=$( gzcat -q $bzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
+      (( women+=$( gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
     done
 
     for gzf in "${gz_files[@]}"; do
-      (( men+=$( gzcat -q $gzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
-      (( women+=$( gzcat -q $gzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
+      (( men+=$( gzcat -q $gzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
+      (( women+=$( gzcat -q $gzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+      '$0 !~ new_line && $0 !~ head && $4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
     done  
 
 case "$gender" in 

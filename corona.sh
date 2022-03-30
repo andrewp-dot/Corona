@@ -124,7 +124,7 @@ read_data(){ #input type mi je na vyliz picu
   else
   if [[ "$gender" == "" ]];then 
   if ((head_count == 0)); then
-        read -r head < $1
+        gzcat -q $1 | read -r head 
         echo $head
         ((head_count++))
     fi
@@ -159,61 +159,72 @@ read_from_stdin() {
 
 infected() { #completed
   number_infected=0
-    #csv
-    for csv in "${csv_files[@]}";do
-    if [[ "$gender" == "" ]];then 
-        (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
-        '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before' $csv | wc -l ) ))
-    else 
-        (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
-        '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend' $csv | wc -l ) ))
+
+if [[ "$gender" == "" ]];then 
+  #csv
+  for csv in "${csv_files[@]}";do
+    if [[ "$csv" != "" ]]; then
+    (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before' $csv | wc -l ) ))
     fi
-    
-    done
-    
-    #bz
-    for bzf in "${bz2_files[@]}"; do
-      if [[ "$gender" == "" ]];then 
-          (( number_infected+=$(gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
-          '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before'  | wc -l ) ))
-      else 
-          (( number_infected+=$(gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
-          '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend'  | wc -l ) ))
-      fi
-    done
-    
-    #gzf
-    for gzf in  "${gz_files[@]}"; do
-    if [[ "$gender" == "" ]];then 
-        (( number_infected+=$(gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
-        '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before'  | wc -l ) ))
-    else 
-        (( number_infected+=$(gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
+  done
+  
+  #bz
+  for bzf in "${bz2_files[@]}"; do
+    (( number_infected+=$( gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before'  | wc -l ) ))
+  done
+  
+  #gzf
+  for gzf in  "${gz_files[@]}"; do
+    (( number_infected+=$(gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
+    '$0 !~ new_line && $0 !~ head && after <= $2 && $2 <= before'  | wc -l ) ))
+  done
+
+else 
+  #csv
+  for csv in "${csv_files[@]}"; do
+   if [[ "$csv" != "" ]]; then
+      (( number_infected+=$(awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" \
+       '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend' $csv | wc -l ) ))
+    fi
+  done
+
+  #bz
+  for bzf in "${bz2_files[@]}"; do 
+      (( number_infected+=$(gzcat -q $bzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
         '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend'  | wc -l ) ))
-    fi
-    done
-  echo $number_infected
+  done
+    
+  #gzf
+  for gzf in  "${gz_files[@]}"; do
+      (( number_infected+=$(gzcat -q $gzf |awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender"\
+      '$0 !~ new_line && $0 !~ head && after <=$2 && $2<= before && $4 == gend'  | wc -l ) ))
+  done
+fi
+
+  echo $number_infected 
 }
 
-# merge() { 
-#    read_data 
-# }
+merge() { 
+   echo picovna
+}
 
 gender() { 
 men=0
 women=0
-for csv in "${csv_files[@]}";do
+  for csv in "${csv_files[@]}";do
       (( men+=$( awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before'  $csv | wc -l) ))
       (( women+=$( awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' $csv | wc -l) ))
     done
     for bzf in "${bz2_files[@]}"; do
-      (( men+=$( gzcat -q $bzf | awk -F, '$4 == "M"' | wc -l) ))
-      (( women+=$( gzcat -q $bzf | awk -F, '$4 == "Z"' | wc -l) ))
+      (( men+=$( gzcat -q $bzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
+      (( women+=$( gzcat -q $bzf |awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
     done
 
-    for gzf in  "${gz_files[@]}"; do
-      (( men+=$( gzcat -q $gzf | awk -F, '$4 == "M"'   | wc -l) ))
-      (( women+=$( gzcat -q $gzf | awk -F, '$4 == "Z"'  | wc -l) ))
+    for gzf in "${gz_files[@]}"; do
+      (( men+=$( gzcat -q $gzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "M" && after <= $2 && $2 <= before' | wc -l) ))
+      (( women+=$( gzcat -q $gzf | awk -F, -v before="$before_date" -v after="$after_date" '$4 == "Z" && after <= $2 && $2 <= before' | wc -l) ))
     done  
 
 case "$gender" in 
@@ -304,19 +315,20 @@ do
   if [[ $file =~ ^.*\.csv$ ]] 
   then input_type="csv" ; csv_files[$csv_idx]="$file" ; ((csv_idx++))
   elif [[ $file =~ ^.*\.bz2$ ]]
-  then input_type="bz2" ; bz2_files[$bz_idx]="$file" ; echo  ${bz2_files[$bz_idx]} ; ((bz_idx++))
+  then input_type="bz2" ; bz2_files[$bz_idx]="$file" ; ((bz_idx++))
   elif [[ $file =~ ^.*\.gz$ ]]
-  then input_type="gz" ; gz_files[$gz_idx]="$file" ; ((gz_idx++))
-  fi
-  if (( $index == $# )) && [[ $input_type == "stdin" ]];then
-      read_from_stdin 
+  then input_type="gz" ; gz_files[$gz_idx]="$file" ;((gz_idx++))
+  fi 
+  if (( $index == $# )) && [[ "$input_type" == "stdin" ]];then
+      echo h #read_from_stdin 
   fi
   ((index++))
 done 
-if [[ $input_type == "stdin" ]]
-then 
-  awk  -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line ) {print $0 } }' 
-fi
+
+# if [[ $input_type == "stdin" ]]
+# then 
+#   awk -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line ) {print $0 } }' 
+# fi
 
 
 case "$command" in 
@@ -330,7 +342,7 @@ case "$command" in
     countries) countries ;;
     districts) districts ;;
     regions) regions ;;
-    "") merge  ;;
+    "") merge ;;
 esac
 
 # awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\

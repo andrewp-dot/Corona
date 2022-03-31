@@ -1,6 +1,9 @@
 #!/bin/bash
 #mc tinysurvival eu
 
+#dopisat usage
+#prepinac -s histogramy
+
 env POSIXLY_CORRECT=1 | echo -n #trosku ojeb ale uvidme
 
 declare -a csv_files=("")
@@ -8,27 +11,26 @@ declare -a bz2_files=("")
 declare -a gz_files=("")
 
 usage() {
-  echo corona [-h] [FILTERS] [COMMAND] [LOG [LOG2 [...]]
+  echo corona [-h] [FILTERS] [COMMAND] [LOG [LOG2 [...]] 
   exit 1; #mozna popsat signal 1 - co znamena ta picovna
 }
 
-normal_year_pattern='^[0-9]{4}(\-)((((0[13578]|1[02])(\-)31))|((0[13456789]|1[012])(\-)(30|29))|((0[1-9]|1[0-2])(\-)(0[1-9]|1[0-9]|2[0-8])))$'
-leap_year_pattern='^[0-9]{2}([02468][048]|[13579][26])(\-)((((0[13578]|1[02])(\-)31))|((0[13456789]|1[012])(\-)(30))|((0[1-9]|1[0-2])(\-)(0[1-9]|1[0-9]|2[0-9])))$'
+normal_year_pattern='^[0-9]{4}(-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30|29))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-8])))$'
+leap_year_pattern='^[0-9]{2}([02468][048]|[13579][26])(-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-9])))$'
 
 #overenia na format prepinacov
 verify_date() {
-    echo date verification $1; #regexp
     if [[ $1 =~ $normal_year_pattern ]] || [[ $OPTARG =~ $leap_year_pattern ]] #yyyy-mm-dd - basic verification - to ADD: limity, priestupne roky / kvôli februáru, validácia poctu dni
     then 
-        echo "the date format is valid"
         date_is_valid="true"
     else
       echo "Invalid date: $1"
       date_is_valid="false"
+      usage
     fi
 }
 
-age_regex='^[1-9][0-9]*$'
+age_regex='^[0-9]*$'
 verify_age(){
   if ! [[ $1 =~ $age_regex ]]
   then 
@@ -88,6 +90,7 @@ do
     ;;
     s) check_histogram_width $OPTARG ;
     ;;
+
     h) usage
     ;;
     ?) echo Invalid option ; usage
@@ -102,8 +105,6 @@ if ! [[ $command =~ $optstring_commands ]]
 then 
     command=""  
 fi
-
-head_count=0
 
 #nacitanie z konkretneho suboru
 read_data(){ #input type mi je na vyliz picu 
@@ -137,11 +138,6 @@ read_data(){ #input type mi je na vyliz picu
 read_from_stdin() { #dobra na merge, ale treba vytvorit univerzalnu funkciu, ktora executne command passnuty do nej jak argument
   while read -r line 
         do
-        if (( $head_count == 0 )) && [[ $line =~ $head_regex ]]; then
-          echo "$line" 
-          (( head_count++ ))
-        fi
-
         if ! [[ $line =~ $head_regex ]]; then 
           if [[ "$gender" == "" ]];then 
             echo "$line" | awk -F, -v new_line="$new_line_regex" -v before="$before_date" -v after="$after_date" '$0 !~ new_line && after <=$2 && $2<= before'
@@ -268,10 +264,12 @@ gender() { #completed
 men=0
 women=0
   for csv in "${csv_files[@]}";do
+      if [[ "$csv" != "" ]]; then
       (( men+=$( awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
       '$0 !~ new_line && $0 !~ head && $4 == "M" && after <= $2 && $2 <= before'  $csv | wc -l) ))
       (( women+=$( awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date"\
       '$0 !~ new_line && $0 !~ head && $4 == "Z" && after <= $2 && $2 <= before' $csv | wc -l) ))
+      fi
     done
 
     for bzf in "${bz2_files[@]}"; do

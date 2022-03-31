@@ -336,18 +336,18 @@ printf("\
 }
 
 daily() {
-  #ulozit jeden datum do pola a vnimat zmeny tadaa
-  #prist na sposob, ako vyfiltrovat vsetky datumy
-  echo daily... #statistika podla dni
-  #asi regexp 
+  awk -F, ' $2 != ""  {days[$2] += 1} END{for (day in days) printf("%s : %d\n", day, days[day])}'
 }
 
 monthly() {
-  echo monthly... #podla mesiacov
+  awk -F, ' $2 != ""  {months[substr($2,1,7)] += 1} END{for (month in months) printf("%s : %d\n", month, months[month])}'
+  #awk -F, -v year_month="$yy_mm" ' yy_mm != ""  {months[yy_mm] += 1} END{for (month in months) printf("%s : %d\n", month, months[month])}'
 }
 
 yearly() {
-  echo yearly... #podla rokov
+  awk -F, ' $2 != ""  {years[substr($2,1,4)] += 1} END{for (year in years) printf("%s : %d\n", year, years[year])}'
+  #awk -F, -v year="$yy" ' year != ""  {years[year] += 1} END{for (year in years) printf("%s : %d\n", year, years[year])}'
+  #awk -F, 'years[] += 1 { for (year in years) printf("%s : %d\n",year,years[year])}' #iba ak sa rok zmení
 }
 
 countries() { #completed - pridat formatovanie
@@ -391,18 +391,18 @@ case "$command" in
     merge) echo $header; merge | sort -d ;;
     gender) gender ;;
     age) merge | age ;;
-    daily) daily ;;
-    monthly) monthly ;;
-    yearly) yearly ;;
+    daily) merge | daily | sort -d ;;
+    monthly) merge | monthly | sort -d ;;
+    yearly) merge | yearly | sort -d ;;
     countries) merge | countries | sort -d  ;;
     districts) merge | districts | sort -d ;;
     regions) merge | regions | sort -d ;;
     "") echo $header; merge | sort -d ;;
 esac
 
-# awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
-# ( $2 !~ norm_date && $2 !~ leap_date) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
-# ($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}'   #este vyriesit kde a ako to vypisat
+merge | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
+( $2 !~ norm_date && $2 !~ leap_date) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
+($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}'  
 
 exit 0;
 

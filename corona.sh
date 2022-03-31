@@ -350,16 +350,16 @@ yearly() {
   echo yearly... #podla rokov
 }
 
-countries() { #next
-  echo countries... #statistika nakazenych pre jednotlive krajiny - bez CZ
+countries() { #completed - pridat formatovanie
+  awk -F, '$8 != "CZ" && $8 != ""  {countries[$8] += 1} END{for (country in countries) printf("%s : %d\n", country, countries[country])}'
 }
 
-districts() { 
-  echo districts... #pre okresy
+districts() { #completed - pridat formatovanie
+  awk -F, '$6 != ""  {districts[$6] += 1} END{for (district in districts) printf("%s : %d\n", district, districts[district])}'
 }
 
-regions() {
-  echo regions... #pre kraje
+regions() { #completed - pridat formatovanie
+  awk -F, '$5 != ""  {regions[$5] += 1} END{for (region in regions) printf("%s : %d\n", region, regions[region])}'
 }
 
 
@@ -386,12 +386,6 @@ do
   ((index++))
 done 
 
-# if [[ $input_type == "stdin" ]]
-# then 
-#   awk -v empty_line="$new_line_regex" '{ if ($0 !~ empty_line ) {print $0 } }' 
-# fi
-
-
 case "$command" in 
     infected) infected ;;
     merge) echo $header; merge | sort -d ;;
@@ -400,9 +394,9 @@ case "$command" in
     daily) daily ;;
     monthly) monthly ;;
     yearly) yearly ;;
-    countries) countries ;;
-    districts) districts ;;
-    regions) regions ;;
+    countries) merge | countries | sort -d  ;;
+    districts) merge | districts | sort -d ;;
+    regions) merge | regions | sort -d ;;
     "") echo $header; merge | sort -d ;;
 esac
 

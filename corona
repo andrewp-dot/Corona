@@ -41,15 +41,8 @@ usage() {
   exit 1; 
 }
 
-check_valid_data() {
-  awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
-  ( $2 !~ norm_date && $2 !~ leap_date && $2 != "" ) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
-  ($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}'  
-
-}
-
-normal_year_pattern='^[0-9][0-9][0-9][0-9](-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30|29))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-8])))$'
-leap_year_pattern='^[0-9][0-9]([02468][048]|[13579][26])(-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-9])))$'
+normal_year_pattern='^[[:space:]]*[0-9][0-9][0-9][0-9](-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30|29))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-8])))[[:space:]]*$'
+leap_year_pattern='^[[:space:]]*[0-9][0-9]([02468][048]|[13579][26])(-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-9])))[[:space:]]*$'
 
 #overenia na format prepinacov
 verify_date() {
@@ -67,10 +60,36 @@ age_regex='^[0-9]*$'
 verify_age(){
   if ! [[ $1 =~ $age_regex ]]
   then 
-    echo Invalid age: 
-  else
-    echo age is good 
+    echo Invalid age: $1 ; usage
   fi
+}
+
+data=""
+
+check_valid_data() {
+   for csv in "${csv_files[@]}";do
+    if [[ "$csv" != "" ]]; then
+      awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next;}\
+      $2 !~ norm_date && $2 !~ leap_date && $2 != ""  {printf("Invalid date: %s\n",$0) } \
+      $3 !~ age && $3 != "" {printf("Invalid age: %s\n", $0) }' $csv
+    fi
+  done
+
+  for bzf in "${bz2_files[@]}"; do
+    if [[ "$bzf" != "" ]]; then
+        bzcat -q $bzf | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next;}\
+      $2 !~ norm_date && $2 !~ leap_date && $2 != ""  {printf("Invalid date: %s\n",$0) } \
+      $3 !~ age && $3 != "" {printf("Invalid age: %s\n", $0)}' 
+    fi
+  done
+
+  for gzf in  "${gz_files[@]}"; do
+    if [[ "$gzf" != "" ]]; then
+      gzip -dcq $gzf | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next;}\
+      $2 !~ norm_date && $2 !~ leap_date && $2 != ""  {printf("Invalid date: %s\n",$0)}\
+      $3 !~ age && $3 != "" {printf("Invalid age: %s\n", $0)}' 
+    fi
+  done
 }
 
 #premenne pre histogram
@@ -156,9 +175,12 @@ then
     command=""  
 fi
 
+inv_data=""
+
 #nacitanie zo standartneho vstupu
 read_from_stdin() { 
-  while read -r line 
+  local previous_data=""
+  while read -r line
         do
           cmd_out='$0 !~ new_line && $0 !~ head '
           if [[ "$gender" != "" ]]; then
@@ -169,9 +191,20 @@ read_from_stdin() {
           fi 
           if [[ "$before_date" != "" ]]; then
             cmd_out+=' && $2 <= before'
-          fi 
-          echo "$line" | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+          fi
+
+          if [[ "$data" != "$previous_data" ]] && [[ "$data" != "" ]]; then
+               data+=$'\n'
+          fi
+          previous_data+="$data"
+
+          data+=$(echo "$line" | awk -F, -v head="$head_regex" -v new_line="$new_line_regex" -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex\
+          '$0 !~ head && $0 !~ new_line && $2 !~ norm_date && $2 !~ leap_date && $2 != ""  {printf("Invalid date: %s\n",$0)}\
+          $0 !~ head && $0 !~ new_line && $3 !~ age && $3 != "" {printf("Invalid age: %s\n", $0)}' | awk -F, -v head="$head_regex" -v new_line="$new_line_regex" '$0 !~ new_line && $0 !~ head {print $0}')
+
+          echo "$line" |  awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out"        
   done
+  echo "$data"
 }
 
 #COMMANDS
@@ -217,10 +250,9 @@ merge() {
   #gzf
   for gzf in  "${gz_files[@]}"; do
    if [[ "$gzf" != "" ]]; then
-     gzip -dcq $gzf |  awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
-     fi
+      gzip -dcq $gzf |  awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+      fi
   done
-
 
 }
 
@@ -569,6 +601,18 @@ sort_none_down(){
   echo "$sorted_with_none_top" | awk -F='\n' -v none="" '$0 ~ /None:*/ {none=$0} $0 !~ /None:*/ {print $0} END{ if(none!="") print none}' 
 }
 
+sort_stdin() {
+  sorted_in=$(sort -d)
+  echo "$sorted_in"
+  echo "$inv_data"
+  if [[ -n "$inv_data" ]]
+  then
+    echo "not Empty"  
+  else
+    echo "empty"
+  fi
+}
+
 input_type="stdin"
 index=0
 csv_idx=0
@@ -589,7 +633,7 @@ done
 
 case "$command" in 
     infected) merge | infected ;;
-    merge) echo $header; merge | sort -d ;;
+    merge) echo "$header"; merge | sort -d ;;
     gender) merge | gender ;;
     age) merge | age ;;
     daily) merge | daily | sort_none_down ;;
@@ -598,7 +642,11 @@ case "$command" in
     countries) merge | countries | sort_none_down ;;
     districts) merge | districts | sort_none_down ;;
     regions) merge | regions | sort_none_down ;;
-    "") merge | sort -d ;;
+    "") echo "$header"; merge |  sed '/^$/d' ;;
 esac
+
+if [[ "$input_type" != "stdin" ]];then
+  check_valid_data 1>&2
+fi
 
 exit 0;

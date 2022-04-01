@@ -88,9 +88,9 @@ check_histogram_width() {
       case $1 in 
       gender)  max_value=100000 ;; #done
       age)  max_value=10000;; #done
-      daily)  max_value=1 ;; #500
-      monthly)  max_value=10000;;
-      yearly)  max_value=100000;;
+      daily)  max_value=500 ;; #done
+      monthly)  max_value=10000;; #done
+      yearly)  max_value=100000;; #done
       countries)  max_value=100 ;;
       districts) max_value=1000 ;;
       regions)   max_value=10000;;
@@ -241,89 +241,87 @@ merge() {
 }
 
 gender() { 
-men=0
-women=0
- if [[ "$input_type" == "stdin" ]]; then
-    while read -r line 
-    do 
-      ((men+=$( echo "$line" | awk -F, '$4== "M" '| wc -l ) ))
-      (( women+=$( echo "$line" | awk -F,  '$4== "Z" ' | wc -l ) ))
-    done
-  fi
-
-  for csv in "${csv_files[@]}";do
-      if [[ "$csv" != "" ]]; then
-        (( men+=$( awk -F,  '$4== "M"' $csv | wc -l) ))
-        (( women+=$( awk -F,  '$4== "Z"' $csv| wc -l) ))
-      fi
-    done
-
-    for bzf in "${bz2_files[@]}"; do
-      (( men+=$( gzcat -q $bzf |  awk -F,  '$4== "M"'  | wc -l) ))
-      (( women+=$( gzcat -q $bzf | awk -F,  '$4== "Z"' | wc -l) ))
-    done
-
-    for gzf in "${gz_files[@]}"; do
-      (( men+=$( gzcat -q $gzf |  awk -F,  '$4== "M"' | wc -l) ))
-      (( women+=$( gzcat -q $gzf | awk -F,  '$4== "Z"' | wc -l) ))
-    done  
-
-if [[ "$histogram" == "true" ]]; then
-    index=0;
-    if (( $men > $women )); then
-      max_value=$men
-    else 
-      max_value=$women
+  men=0
+  women=0
+  if [[ "$input_type" == "stdin" ]]; then
+      while read -r line 
+      do 
+        ((men+=$( echo "$line" | awk -F, '$4== "M" '| wc -l ) ))
+        (( women+=$( echo "$line" | awk -F,  '$4== "Z" ' | wc -l ) ))
+      done
     fi
 
-   case "$gender" in 
-    M) echo -n M: ; 
-      while (($index < $histogram_width * $men /$max_value ))
-      do
-        echo -n "#"
-        (( index++ ))
+    for csv in "${csv_files[@]}";do
+        if [[ "$csv" != "" ]]; then
+          (( men+=$( awk -F,  '$4== "M"' $csv | wc -l) ))
+          (( women+=$( awk -F,  '$4== "Z"' $csv| wc -l) ))
+        fi
       done
-      echo; index=0;
-      ;;
 
-    Z) echo -n Z: ; 
-      while (($index < $histogram_width * $women /$max_value ))
-      do
-        echo -n "#"
-        (( index++ ))
+      for bzf in "${bz2_files[@]}"; do
+        (( men+=$( gzcat -q $bzf |  awk -F,  '$4== "M"'  | wc -l) ))
+        (( women+=$( gzcat -q $bzf | awk -F,  '$4== "Z"' | wc -l) ))
       done
-      echo;  index=0;
-      ;;
 
-    "") echo -n M: #men 
-        while (($index < $histogram_width * $men /$max_value  ))
+      for gzf in "${gz_files[@]}"; do
+        (( men+=$( gzcat -q $gzf |  awk -F,  '$4== "M"' | wc -l) ))
+        (( women+=$( gzcat -q $gzf | awk -F,  '$4== "Z"' | wc -l) ))
+      done  
+
+  if [[ "$histogram" == "true" ]]; then
+      index=0;
+      if (( $men > $women )); then
+        max_value=$men
+      else 
+        max_value=$women
+      fi
+
+    case "$gender" in 
+      M) echo -n M: ; 
+        while (($index < $histogram_width * $men /$max_value ))
+        do
+          echo -n "#"
+          (( index++ ))
+        done
+        echo; index=0;
+        ;;
+
+      Z) echo -n Z: ; 
+        while (($index < $histogram_width * $women /$max_value ))
         do
           echo -n "#"
           (( index++ ))
         done
         echo;  index=0;
+        ;;
 
-        
-        echo -n Z: #women
-        while (($index < $histogram_width * $women /$max_value  ))
-        do
-          echo -n "#"
-          (( index++ ))
-        done
-        echo; index=0 ;;  
-  esac
-else
-  case "$gender" in 
-    M) echo M: $men ;;
-    Z) echo Z: $women ;;
-    "")  echo M: $men ; echo Z: $women ;;
-  esac
-fi
+      "") echo -n M: #men 
+          while (($index < $histogram_width * $men /$max_value  ))
+          do
+            echo -n "#"
+            (( index++ ))
+          done
+          echo;  index=0;
+
+          
+          echo -n Z: #women
+          while (($index < $histogram_width * $women /$max_value  ))
+          do
+            echo -n "#"
+            (( index++ ))
+          done
+          echo; index=0 ;;  
+    esac
+  else
+    case "$gender" in 
+      M) echo M: $men ;;
+      Z) echo Z: $women ;;
+      "")  echo M: $men ; echo Z: $women ;;
+    esac
+  fi
 }
 
-age() { #int((hist_width * count[0]/max_val))
-  #vzorec na histogram # = value/max_value *width
-  #podla intervalov vypise statistiku (tabulka)
+age() { 
   awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
   'BEGIN{\
     interval_begin=6; interval_end=15;
@@ -360,9 +358,8 @@ age() { #int((hist_width * count[0]/max_val))
     cnt_idx=1
     printf("0-5   :"); while (idx < int((hist_width * count[0]/max_val))) {printf "#" ; idx++}; printf "\n" 
     while (cnt_idx < 11) {\
-      if(cnt_idx == "none") {idx=0; break;}\
-      printf("%-2d-%-3d:", interval_begin, interval_end)
-      while (idx < int(hist_width*count[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0
+      if(cnt_idx != "None") {printf("%-2d-%-3d:", interval_begin, interval_end)
+      while (idx < int(hist_width*count[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0}
       interval_begin+=10; interval_end+=10;
       cnt_idx++
     }\
@@ -396,16 +393,12 @@ daily() {
   }\
 
   if(hist == "true") {\
-    cnt_idx=1
     for (cnt_idx in days) {\
-      if(cnt_idx == "None") {idx=0; break;}\
-      if(day != "None") printf("%-10s: ", cnt_idx);\
-      while (idx < int(hist_width*days[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;\
+      if(cnt_idx != "None") {printf("%-10s: ", cnt_idx);\
+      while (idx < int(hist_width*days[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
     if(days["None"]!="") { printf("None      : ", max_val); while (idx < int(hist_width* days["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
-
-  
 
   else{\
   for (day in days) {\
@@ -415,19 +408,70 @@ daily() {
 }
 
 monthly() {
-  awk -F, ' $2 != "" {months[substr($2,1,7)] += 1} $2=="" {months["None"] += 1}\
-  --> here place your code <--
-  END{for (month in months){\
+   awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
+   ' $2 != "" {months[substr($2,1,7)] += 1} $2=="" {months["None"] += 1}\
+
+  END{\
+
+  if(implicit_max_val == 1) {\
+    for (i in months) {\
+      if(months[i] > max_val)
+      {
+        max_val = months[i];\
+      }
+    }\
+  }\
+  else {\
+    max_val=implicit_max_val
+  }\
+
+  if(hist == "true") {\
+    for (cnt_idx in months) {\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      while (idx < int(hist_width*months[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
+    }\
+    if(months["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* months["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+  }  
+
+  else{\
+  for (month in months){\
   if(month != "None") printf("%-7s: %d\n", month, months[month])};\
-  if( months["None"] != "") printf("%-7s: %d\n", "None", months["None"])}'
+  if( months["None"] != "") printf("%-7s: %d\n", "None", months["None"])}\
+  }' 
 }
 
 yearly() {
-  awk -F, '$2 != "" {years[substr($2,1,4)] += 1} $2=="" {years["None"] += 1}\
-   --> here place your code <--
-  END{for (year in years){\
+   awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
+   '$2 != "" {years[substr($2,1,4)] += 1} $2=="" {years["None"] += 1}\
+  END{\
+
+  if(implicit_max_val == 1) {\
+    for (i in years) {\
+      if(years[i] > max_val)
+      {
+        max_val = years[i];\
+      }
+    }\
+  }\
+  else {\
+    max_val=implicit_max_val
+  }\
+
+  if(hist == "true") {\
+    for (cnt_idx in years) {\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      while (idx < int(hist_width*years[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
+    }\
+    if(years["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* years["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+  }  
+
+  else{\
+  for (year in years){\
   if(year != "None") printf("%-4s: %d\n", year, years[year])};\
-  if( years["None"] != "") printf("%-4s: %d\n", "None", years["None"])}'
+  if( years["None"] != "") printf("%-4s: %d\n", "None", years["None"])}\
+  }' 
+  
+  
 }
 
 countries() { #formatovanie podla najdlhsieho a vypisiat nejak None az na konci

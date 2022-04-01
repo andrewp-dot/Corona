@@ -2,5 +2,5 @@
 *.csv
 *
 
-!corona.sh
+!corona
 !.gitignore

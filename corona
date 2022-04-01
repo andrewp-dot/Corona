@@ -616,5 +616,3 @@ merge | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pat
 
 exit 0;
 
-# v pirpade zadaneho cilsa:
-#max_value ~ histogram_width

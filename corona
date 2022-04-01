@@ -6,8 +6,6 @@ declare -a csv_files=("")
 declare -a bz2_files=("")
 declare -a gz_files=("")
 
-#TO DO
-#histogramy
 
 usage() {
   echo corona [-h] [FILTERS] [COMMAND] [LOG [LOG2 [...]] 
@@ -86,11 +84,11 @@ check_histogram_width() {
       ((OPTIND--))  #option index - 1 preto, aby sme nepreskocili prikaz, ak by bol za prepinacom -s rovno prikaz
       histogram_width=1
       case $1 in 
-      gender)  max_value=100000 ;; #done
-      age)  max_value=10000;; #done
-      daily)  max_value=500 ;; #done
-      monthly)  max_value=10000;; #done
-      yearly)  max_value=100000;; #done
+      gender)  max_value=100000 ;; 
+      age)  max_value=10000;; 
+      daily)  max_value=500 ;; 
+      monthly)  max_value=10000;; 
+      yearly)  max_value=100000;; 
       countries)  max_value=100 ;;
       districts) max_value=1000 ;;
       regions)   max_value=10000;;
@@ -100,7 +98,7 @@ check_histogram_width() {
 }
 
 #inicializacia filtrov
-after_date="" #implicitna najnizsia hodnota - pri porovnani stringov nie je nic mesnie ako 0 (v nasom pripade pri porovnavani cisel)
+after_date="" 
 before_date="" 
 gender=""
 
@@ -229,12 +227,16 @@ merge() {
   
   #bz
   for bzf in "${bz2_files[@]}"; do
-      gzcat -q $bzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+   if [[ "$bzf" != "" ]]; then
+      bzcat -q $bzf | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+    fi
   done
   
   #gzf
   for gzf in  "${gz_files[@]}"; do
-     gzcat -q $gzf |  awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+   if [[ "$gzf" != "" ]]; then
+     gzip -dcq $gzf |  awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
+     fi
   done
 
 
@@ -259,21 +261,27 @@ gender() {
       done
 
       for bzf in "${bz2_files[@]}"; do
-        (( men+=$( gzcat -q $bzf |  awk -F,  '$4== "M"'  | wc -l) ))
-        (( women+=$( gzcat -q $bzf | awk -F,  '$4== "Z"' | wc -l) ))
+        if [[ "$bzf" != "" ]]; then
+          (( men+=$( bzcat -q  $bzf |  awk -F,  '$4== "M"'  | wc -l) ))
+          (( women+=$( bzcat -q $bzf | awk -F,  '$4== "Z"' | wc -l) ))
+        fi
       done
 
       for gzf in "${gz_files[@]}"; do
-        (( men+=$( gzcat -q $gzf |  awk -F,  '$4== "M"' | wc -l) ))
-        (( women+=$( gzcat -q $gzf | awk -F,  '$4== "Z"' | wc -l) ))
+        if [[ "$gzf" != "" ]]; then
+          (( men+=$( gzip -dcq $gzf |  awk -F,  '$4== "M"' | wc -l) ))
+          (( women+=$( gzip -dcq $gzf | awk -F,  '$4== "Z"' | wc -l) ))
+        fi
       done  
 
   if [[ "$histogram" == "true" ]]; then
       index=0;
       if (( $men > $women )); then
         max_value=$men
-      else 
+      elif (( $men < $women )); then
         max_value=$women
+      else 
+        max_value=1 #default case
       fi
 
     case "$gender" in 
@@ -470,32 +478,104 @@ yearly() {
   if(year != "None") printf("%-4s: %d\n", year, years[year])};\
   if( years["None"] != "") printf("%-4s: %d\n", "None", years["None"])}\
   }' 
-  
-  
 }
 
 countries() { #formatovanie podla najdlhsieho a vypisiat nejak None az na konci
-  awk -F, '$8 != "" {countries[$8] += 1} $8 =="" {countries["None"]+=1}\
-   --> here place your code <--
+   awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
+   '$8 != "" {countries[$8] += 1} $8 =="" {countries["None"]+=1}\
+  
   END{\
+
+  if(implicit_max_val == 1) {\
+    for (i in countries) {\
+      if(countries[i] > max_val)
+      {
+        max_val = countries[i];\
+      }
+    }\
+  }\
+  else {\
+    max_val=implicit_max_val
+  }\
+
+  if(hist == "true") {\
+    for (cnt_idx in countries) {\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      while (idx < int(hist_width*countries[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
+    }\
+    if(countries["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* countries["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+  }  
+
+  else{\
   for (country in countries) if(country != "None") printf("%-2s: %d\n", country, countries[country]);\
-  printf("%-5s: %d\n", "None", countries["None"])}'  
+  printf("%-5s: %d\n", "None", countries["None"])}\
+  }' 
 }
 
 districts() { 
-  awk -F, '$6 != "" {districts[$6] += 1} $6 =="" {districts["None"] += 1}\
-   --> here place your code <--
-  END{for (district in districts){\
-  if(district != "None") printf("%-5s : %d\n", district, districts[district])};\
-  if(districts["None"]!="") printf("%-5s : %d\n", "None", districts["None"])}'
+  awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
+  '$6 != "" {districts[$6] += 1} $6 =="" {districts["None"] += 1}\
+  
+  END{\
+
+  if(implicit_max_val == 1) {\
+    for (i in districts) {\
+      if(districts[i] > max_val)
+      {
+        max_val = districts[i];\
+      }
+    }\
+  }\
+  else {\
+    max_val=implicit_max_val
+  }\
+
+  if(hist == "true") {\
+    for (cnt_idx in districts) {\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%-4s: ", cnt_idx);\
+      while (idx < int(hist_width*districts[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
+    }\
+    if(districts["None"]!="") { printf("None  : ", max_val); while (idx < int(hist_width* districts["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+  }  
+
+  else{\
+  for (district in districts){\
+  if(district != "None") printf("%-4s : %d\n", district, districts[district])};\
+  if(districts["None"]!="") printf("%-5s  : %d\n", "None", districts["None"])}
+  }'
 }
 
 regions() { 
-  awk -F, '$5 != "" {regions[$5] += 1} $5 =="" {regions["None"] += 1}\
-  --> here place your code <--
-  END{for (region in regions){\
-  if(region != "None") printf("%-5s : %d\n", region, regions[region])};\
-  printf("%-5s : %d\n", "None", regions["None"])}'
+  awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
+  '$5 != "" {regions[$5] += 1} $5 =="" {regions["None"] += 1}\
+  
+  END{\
+
+  if(implicit_max_val == 1) {\
+    for (i in regions) {\
+      if(regions[i] > max_val)
+      {
+        max_val = regions[i];\
+      }
+    }\
+  }\
+  else {\
+    max_val=implicit_max_val
+  }\
+
+  if(hist == "true") {\
+    for (cnt_idx in regions) {\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%-4s: ", cnt_idx);\
+      while (idx < int(hist_width*regions[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
+    }\
+    if(regions["None"]!="") { printf("None  : ", max_val); while (idx < int(hist_width* regions["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+  }  
+
+  else{\
+  for (region in regions){\
+  if(region != "None") printf("%-4s : %d\n", region, regions[region])};\
+  printf("%-5s : %d\n", "None", regions["None"])}
+  }'
 }
 
 input_type="stdin"

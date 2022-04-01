@@ -41,6 +41,13 @@ usage() {
   exit 1; 
 }
 
+check_valid_data() {
+  awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
+  ( $2 !~ norm_date && $2 !~ leap_date && $2 != "" ) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
+  ($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}'  
+
+}
+
 normal_year_pattern='^[0-9][0-9][0-9][0-9](-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30|29))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-8])))$'
 leap_year_pattern='^[0-9][0-9]([02468][048]|[13579][26])(-)((((0[13578]|1[02])(-)31))|((0[13456789]|1[012])(-)(30))|((0[1-9]|1[0-2])(-)(0[1-9]|1[0-9]|2[0-9])))$'
 
@@ -149,30 +156,6 @@ then
     command=""  
 fi
 
-#nacitanie z konkretneho suboru
-read_data(){ 
-  if [[ "$input_type" = "csv" ]];then 
-    if ((head_count == 0)); then
-        read -r head < $1
-        echo $head
-        ((head_count++))
-    fi
-    
-
-  else
-  if [[ "$gender" == "" ]];then 
-  if ((head_count == 0)); then
-        gzcat -q $1 | read -r head 
-        echo $head
-        ((head_count++))
-    fi
-      awk -F, -v new_line="$new_line_regex" -v before="$before_date" -v after="$after_date" '$0 !~ new_line && after <=$2 && $2<= before ' $1
-    else
-      awk -F, -v new_line="$new_line_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" '$0 !~ new_line && after <=$2 && $2<= before && $4 == gend' $1
-    fi
-  fi
-}
-
 #nacitanie zo standartneho vstupu
 read_from_stdin() { 
   while read -r line 
@@ -187,7 +170,6 @@ read_from_stdin() {
           if [[ "$before_date" != "" ]]; then
             cmd_out+=' && $2 <= before'
           fi 
-
           echo "$line" | awk -F, -v new_line="$new_line_regex" -v head="$head_regex" -v before="$before_date" -v after="$after_date" -v gend="$gender" "$cmd_out" 
   done
 }
@@ -385,7 +367,8 @@ age() {
 
 daily() {
   awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
-  '$2 != "" {days[$2] += 1} $2=="" {days["None"] += 1}\
+  -v normal_date="$normal_year_pattern" -v leap_date="$leap_year_pattern"\
+  '$2 !~ normal_date && $2 !~ leap_date && $2 != "" {next;}  $2 != "" {days[$2] += 1} $2=="" {days["None"] += 1}\
 
   END{\
   if(implicit_max_val == 1) {\
@@ -402,22 +385,24 @@ daily() {
 
   if(hist == "true") {\
     for (cnt_idx in days) {\
-      if(cnt_idx != "None") {printf("%-10s: ", cnt_idx);\
+      if(cnt_idx != "None") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*days[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(days["None"]!="") { printf("None      : ", max_val); while (idx < int(hist_width* days["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(days["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* days["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
   for (day in days) {\
-  if(day != "None") printf("%-5s: %d\n", day, days[day])};\
-  if( days["None"] != "") printf("%-10s: %d\n", "None", days["None"])}\
+  if(day != "None") printf("%s: %d\n", day, days[day])};\
+  if( days["None"] != "") printf("%s: %d\n", "None", days["None"])}\
   }'
 }
 
+month_regex='([0-9][0-9][0-9][0-9](-)(0[1-9]|1[012]))'
 monthly() {
    awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
-   ' $2 != "" {months[substr($2,1,7)] += 1} $2=="" {months["None"] += 1}\
+   -v valid_month="$month_regex"\
+   'substr($2,1,7) !~ valid_month && $2 != "" {next;} $2 != "" {months[substr($2,1,7)] += 1} $2=="" {months["None"] += 1}\
 
   END{\
 
@@ -435,22 +420,23 @@ monthly() {
 
   if(hist == "true") {\
     for (cnt_idx in months) {\
-      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*months[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(months["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* months["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(months["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* months["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
   for (month in months){\
-  if(month != "None") printf("%-7s: %d\n", month, months[month])};\
-  if( months["None"] != "") printf("%-7s: %d\n", "None", months["None"])}\
+  if(month != "None") printf("%s: %d\n", month, months[month])};\
+  if( months["None"] != "") printf("%s: %d\n", "None", months["None"])}\
   }' 
 }
 
+
 yearly() {
    awk -F, -v hist="$histogram" -v hist_width="$histogram_width" -v implicit_max_val="$max_value"\
-   '$2 != "" {years[substr($2,1,4)] += 1} $2=="" {years["None"] += 1}\
+   'substr($2,1,4) !~ /[0-9][0-9][0-9][0-9]/ && $2 !="" {next;} $2 != "" {years[substr($2,1,4)] += 1} $2=="" {years["None"] += 1}\
   END{\
 
   if(implicit_max_val == 1) {\
@@ -467,16 +453,16 @@ yearly() {
 
   if(hist == "true") {\
     for (cnt_idx in years) {\
-      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*years[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(years["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* years["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(years["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* years["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
   for (year in years){\
-  if(year != "None") printf("%-4s: %d\n", year, years[year])};\
-  if( years["None"] != "") printf("%-4s: %d\n", "None", years["None"])}\
+  if(year != "None") printf("%s: %d\n", year, years[year])};\
+  if( years["None"] != "") printf("%s: %d\n", "None", years["None"])}\
   }' 
 }
 
@@ -500,15 +486,15 @@ countries() { #formatovanie podla najdlhsieho a vypisiat nejak None az na konci
 
   if(hist == "true") {\
     for (cnt_idx in countries) {\
-      if(cnt_idx != "None" && cnt_idx !="") {printf("%-7s: ", cnt_idx);\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*countries[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(countries["None"]!="") { printf("None   : ", max_val); while (idx < int(hist_width* countries["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(countries["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* countries["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
-  for (country in countries) if(country != "None") printf("%-2s: %d\n", country, countries[country]);\
-  printf("%-5s: %d\n", "None", countries["None"])}\
+  for (country in countries) if(country != "None") printf("%s: %d\n", country, countries[country]);\
+  if(countries["None"]!="") printf("%s: %d\n", "None", countries["None"])}\
   }' 
 }
 
@@ -532,16 +518,16 @@ districts() {
 
   if(hist == "true") {\
     for (cnt_idx in districts) {\
-      if(cnt_idx != "None" && cnt_idx !="") {printf("%-4s: ", cnt_idx);\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*districts[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(districts["None"]!="") { printf("None  : ", max_val); while (idx < int(hist_width* districts["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(districts["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* districts["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
   for (district in districts){\
-  if(district != "None") printf("%-4s : %d\n", district, districts[district])};\
-  if(districts["None"]!="") printf("%-5s  : %d\n", "None", districts["None"])}
+  if(district != "None") printf("%s: %d\n", district, districts[district])};\
+  if(districts["None"]!="") printf("%s: %d\n", "None", districts["None"])}
   }'
 }
 
@@ -565,17 +551,22 @@ regions() {
 
   if(hist == "true") {\
     for (cnt_idx in regions) {\
-      if(cnt_idx != "None" && cnt_idx !="") {printf("%-4s: ", cnt_idx);\
+      if(cnt_idx != "None" && cnt_idx !="") {printf("%s: ", cnt_idx);\
       while (idx < int(hist_width*regions[cnt_idx]/max_val)) {printf "#" ; idx++}; printf "\n" ; idx=0;}\
     }\
-    if(regions["None"]!="") { printf("None  : ", max_val); while (idx < int(hist_width* regions["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
+    if(regions["None"]!="") { printf("None: ", max_val); while (idx < int(hist_width* regions["None"] /max_val) ) {printf "#" ; idx++} printf "\n"  }
   }  
 
   else{\
   for (region in regions){\
-  if(region != "None") printf("%-4s : %d\n", region, regions[region])};\
-  printf("%-5s : %d\n", "None", regions["None"])}
+  if(region != "None") printf("%s: %d\n", region, regions[region])};\
+  printf("%s: %d\n", "None", regions["None"])}
   }'
+}
+
+sort_none_down(){
+  sorted_with_none_top=$(tee >(awk -F='\n' '$0 !~ /None:*/ {print $0}' | sort -d) >/dev/null >(awk -F='\n' '$0 ~ /None:*/ ') )
+  echo "$sorted_with_none_top" | awk -F='\n' -v none="" '$0 ~ /None:*/ {none=$0} $0 !~ /None:*/ {print $0} END{ if(none!="") print none}' 
 }
 
 input_type="stdin"
@@ -601,18 +592,13 @@ case "$command" in
     merge) echo $header; merge | sort -d ;;
     gender) merge | gender ;;
     age) merge | age ;;
-    daily) merge | daily | sort -d ;;
-    monthly) merge | monthly | sort -d ;;
-    yearly) merge | yearly | sort -d ;;
-    countries) merge | countries | sort -d  ;;
-    districts) merge | districts | sort -d ;;
-    regions) merge | regions | sort -d ;;
+    daily) merge | daily | sort_none_down ;;
+    monthly) merge | monthly | sort_none_down ;;
+    yearly) merge | yearly | sort_none_down ;;
+    countries) merge | countries | sort_none_down ;;
+    districts) merge | districts | sort_none_down ;;
+    regions) merge | regions | sort_none_down ;;
     "") merge | sort -d ;;
 esac
 
-merge | awk -F, -v norm_date="$normal_year_pattern" -v leap_date="$leap_year_pattern" -v age=$age_regex 'NR == 1{next}\
-( $2 !~ norm_date && $2 !~ leap_date && $2 != "" ) {printf("Invalid date: %s\n",$0)| "cat 1>&2"}\
-($3 !~ age && $3 != "") {printf("Invalid age: %s\n", $0) | "cat 1>&2"}'  
-
 exit 0;
-

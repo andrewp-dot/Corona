@@ -6,7 +6,6 @@ declare -a csv_files=("")
 declare -a bz2_files=("")
 declare -a gz_files=("")
 
-
 usage() {
   echo corona [-h] [FILTERS] [COMMAND] [LOG [LOG2 [...]] 
   echo
